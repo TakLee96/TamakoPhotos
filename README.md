@@ -62,8 +62,8 @@ pip install fastapi uvicorn opencv-python pillow numpy python-multipart scikit-l
 
 **Using GUI Launcher:**
 ```bash
-# Double-click start.bat
-start.bat
+# Run the shell script
+bash start.sh
 ```
 
 **Using NPM Scripts:**
@@ -134,7 +134,7 @@ TamakoPhotos/
 ├── face_detection/
 │   ├── face_service.py  # AI face detection + clustering
 │   ├── requirements.txt # Minimal Python dependencies
-│   └── start_service.bat # Legacy startup (not needed)
+# (Legacy .bat files removed)
 ├── photos/              # Your uploaded photos
 ├── thumbnails/          # Auto-generated thumbnails
 ├── photos.db            # SQLite database (auto-created)

@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.responses import JSONResponse
 import uvicorn
 import socket
@@ -685,8 +685,8 @@ face_service = FaceDetectionService()
 @app.post("/detect-faces")
 async def detect_faces_endpoint(
     file: UploadFile = File(...),
-    photo_id: str = None,
-    photo_path: str = None
+    photo_id: str = Form(None),
+    photo_path: str = Form(None)
 ):
     """Detect faces in uploaded image"""
     try:

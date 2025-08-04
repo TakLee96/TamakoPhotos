@@ -675,7 +675,7 @@ function cleanup() {
   if (process.platform === 'win32') {
     try {
       const { exec } = require('child_process');
-      exec('taskkill //F //IM python.exe 2>nul', (error, stdout, stderr) => {
+      exec('taskkill //F //IM python.exe 2>/dev/null', (error, stdout, stderr) => {
         if (!error) {
           console.log('Additional Python processes terminated');
         }

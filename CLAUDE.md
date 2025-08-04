@@ -87,8 +87,8 @@ npm run stop:services
 npm run status
 
 # GUI launchers
-start.bat  # Full application launcher
-stop.bat   # Service stopper
+start.sh   # Full application launcher
+npm stop   # Service stopper
 ```
 
 ## The Future of Development

@@ -37,7 +37,10 @@
       "Bash(cmd.exe //c \"C:\\Users\\jiaha\\Developer\\TamakoPhotos\\restart.bat\")",
       "Bash(ls:*)",
       "Bash(git init:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(chmod:*)",
+      "Bash(rm:*)"
     ],
     "deny": []
   }
