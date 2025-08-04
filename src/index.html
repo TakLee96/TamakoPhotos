@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tamako Photos</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="app">
+        <header class="header">
+            <h1>Tamako Photos</h1>
+            <nav class="nav">
+                <button id="timeline-btn" class="nav-btn active">Timeline</button>
+                <button id="faces-btn" class="nav-btn">Faces</button>
+                <div class="nav-section">
+                    <button id="select-btn" class="nav-btn">Select</button>
+                    <button id="select-all-btn" class="nav-btn hidden">Select All</button>
+                    <button id="delete-selected-btn" class="delete-btn hidden">Delete Selected</button>
+                    <button id="cancel-selection-btn" class="cancel-btn hidden">Cancel</button>
+                </div>
+                <button id="upload-btn" class="upload-btn">Upload Photos</button>
+            </nav>
+        </header>
+
+        <main class="main">
+            <div id="status-bar" class="status-bar hidden">
+                <div class="status-content">
+                    <div class="status-icon">⚡</div>
+                    <div class="status-text">Processing faces in background...</div>
+                    <div class="status-progress">
+                        <div class="progress-bar">
+                            <div class="progress-fill"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="error-bar" class="error-bar hidden">
+                <div class="error-content">
+                    <div class="error-icon">⚠️</div>
+                    <div class="error-text">Face detection service unavailable</div>
+                    <button class="error-dismiss" onclick="app.dismissError()">×</button>
+                </div>
+            </div>
+
+            <div id="timeline-view" class="view active">
+                <div id="photo-grid" class="photo-grid">
+                    <div class="loading">Loading photos...</div>
+                </div>
+            </div>
+
+            <div id="faces-view" class="view">
+                <div class="faces-container">
+                    <h2>Browse by Faces</h2>
+                    <div id="faces-grid" class="faces-grid">
+                        <div class="loading">Face detection not yet implemented</div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <div id="drop-zone" class="drop-zone hidden">
+            <div class="drop-content">
+                <div class="drop-icon">📸</div>
+                <p>Drop photos here to upload</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="renderer.js"></script>
+</body>
+</html>

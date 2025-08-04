@@ -1,0 +1,58 @@
+{
+  "name": "tamako-photos",
+  "version": "1.0.0",
+  "description": "Photo management app with face detection",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "cmd //c \"scripts\\start-services.bat\" && npm run start:app",
+    "start:app": "electron .",
+    "start:services": "cmd //c scripts\\start-services.bat",
+    "start:face-service": "cd face_detection && set KMP_DUPLICATE_LIB_OK=TRUE && set PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python && \"/c/Users/jiaha/anaconda3/envs/tensorflow/python.exe\" face_service.py",
+    "stop": "cmd //c scripts\\stop-services.bat",
+    "stop:services": "cmd //c scripts\\stop-services.bat",
+    "stop:face-service": "taskkill //F //IM python.exe 2>/dev/null || echo No Python processes to kill",
+    "restart": "cmd //c restart.bat",
+    "dev": "cmd //c scripts\\start-services.bat && electron . --dev",
+    "dev:app-only": "electron . --dev",
+    "dev:services-only": "cmd //c scripts\\start-services.bat",
+    "build": "electron-builder",
+    "dist": "electron-builder --publish=never",
+    "clean": "npm run stop && timeout /t 2 /nobreak >/dev/null && rmdir /S /Q node_modules 2>/dev/null && npm install",
+    "status": "echo Checking service status... && tasklist //FI \"IMAGENAME eq python.exe\" 2>/dev/null && tasklist //FI \"IMAGENAME eq electron.exe\" 2>/dev/null"
+  },
+  "keywords": [
+    "photos",
+    "face-detection",
+    "electron"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^27.0.0",
+    "electron-builder": "^24.6.4"
+  },
+  "dependencies": {
+    "axios": "^1.6.2",
+    "exifr": "^7.1.3",
+    "form-data": "^4.0.0",
+    "node-fetch": "^3.3.2",
+    "sharp": "^0.32.6",
+    "sqlite3": "^5.1.7"
+  },
+  "build": {
+    "appId": "com.tamako.photos",
+    "productName": "Tamako Photos",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "node_modules/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "assets/icon.ico"
+    }
+  }
+}
