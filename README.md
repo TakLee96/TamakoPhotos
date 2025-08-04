@@ -220,6 +220,46 @@ The app is **production-ready** as-is! For full GPU acceleration:
 - 🧠 **Persistent Indexing** - FAISS index saved/loaded automatically
 - 🛡️ **Production Ready** - Enterprise-grade error handling and monitoring
 
+## 📋 TODO - Next Claude Code Vibe Session
+
+### 🗄️ Database & Persistence Improvements
+- [ ] **Remove face_detection/face_metadata.json** - Migrate all face metadata to SQLite for consistency
+- [ ] **Unified SQLite Schema** - Store face embeddings, clusters, and metadata in centralized database
+- [ ] **Photo ID System** - Generate unique IDs for photos instead of using raw filenames (UTF-8 safety)
+
+### 🧪 Code Organization
+- [ ] **Test File Organization** - Move `test.py`, `test_*.py`, and `*_test.py` to dedicated `tests/` folder
+- [ ] **Clean Project Structure** - Separate development files from production code
+
+### 🎨 Enhanced Face Browsing
+- [ ] **Clickable Face Clusters** - Allow users to click on face clusters to browse related photos
+- [ ] **Face Cluster Management** - Add ability to delete unwanted face clusters
+- [ ] **Photo Gallery View** - Dedicated view for photos within a specific face cluster
+
+### 🔧 UI/UX Improvements  
+- [ ] **Smart Select Button** - Only show "Select All" button after clicking "Select" mode
+- [ ] **Hide Photo Filenames** - Remove filename display to avoid UTF-8 encoding issues
+- [ ] **Responsive Face Grid** - Improve face cluster visualization layout
+
+### 🛠️ Development Tools
+- [ ] **Dev Reset Script** - Create `npm run reset` to clean all data:
+  - `photos.db` (SQLite database)
+  - `photos/` folder (uploaded images)
+  - `thumbnails/` folder (generated thumbnails)  
+  - `face_detection/faces/` folder (detected faces)
+  - `face_detection/face_embeddings.index` (FAISS index)
+  - `face_detection/face_metadata.json` (to be deprecated)
+
+### 📦 Build & Deployment
+- [ ] **Fix npm run build** - Resolve Electron packaging issues for distribution
+- [ ] **Portable Build** - Create standalone executable with bundled Python environment
+- [ ] **Installer Creation** - Windows installer with automatic dependency setup
+
+### 🚀 Performance & Scalability
+- [ ] **Batch Processing** - Process multiple photos simultaneously for faster uploads
+- [ ] **Lazy Loading** - Implement virtual scrolling for large photo collections
+- [ ] **Memory Optimization** - Reduce memory footprint for large face databases
+
 ## 🏆 Built with Claude Code
 
 This entire project showcases the incredible potential of **human-AI collaborative development**:

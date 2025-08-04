@@ -29,6 +29,7 @@ photos/
 thumbnails/
 face_embeddings.index
 face_embeddings.faiss
+face_detection/face_metadata.json
 
 # Python
 __pycache__/
