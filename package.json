@@ -16,8 +16,9 @@
     "dev:app-only": "electron . --dev",
     "dev:services-only": "bash ./scripts/start-services.sh",
     "rebuild": "electron-rebuild",
-    "build": "npm run rebuild && electron-builder",
-    "dist": "npm run rebuild && electron-builder --publish=never",
+    "build": "electron-builder --dir",
+    "build-with-rebuild": "npm run rebuild && electron-builder",
+    "dist": "electron-builder --publish=never",
     "clean": "npm run stop && sleep 2 && rm -rf node_modules && npm install",
     "reset": "npm run stop && bash ./scripts/reset-data.sh",
     "status": "echo Checking service status... && tasklist //FI \"IMAGENAME eq python.exe\" 2>/dev/null && tasklist //FI \"IMAGENAME eq electron.exe\" 2>/dev/null"
@@ -46,6 +47,8 @@
   "build": {
     "appId": "com.tamako.photos",
     "productName": "Tamako Photos",
+    "buildDependenciesFromSource": false,
+    "npmRebuild": false,
     "directories": {
       "output": "dist"
     },
@@ -74,7 +77,8 @@
       }
     ],
     "win": {
-      "target": "nsis"
+      "target": "portable",
+      "forceCodeSigning": false
     },
     "nsis": {
       "oneClick": false,

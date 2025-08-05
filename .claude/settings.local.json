@@ -42,7 +42,9 @@
       "Bash(chmod:*)",
       "Bash(rm:*)",
       "Bash(sqlite3:*)",
-      "Bash(npx electron-rebuild:*)"
+      "Bash(npx electron-rebuild:*)",
+      "Bash(git push:*)",
+      "Bash(CSC_IDENTITY_AUTO_DISCOVERY=false npm run build)"
     ],
     "deny": []
   }

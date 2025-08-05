@@ -7,6 +7,7 @@ class PhotoApp {
         this.faceServiceAvailable = true;
         this.selectionMode = false;
         this.selectedPhotos = new Set();
+        this.showFilenames = localStorage.getItem('showFilenames') !== 'false'; // Default to true
         this.init();
     }
 
@@ -46,6 +47,27 @@ class PhotoApp {
 
         // Add keyboard shortcuts
         document.addEventListener('keydown', (e) => this.handleKeyboardShortcuts(e));
+
+        // Settings dropdown
+        const settingsBtn = document.getElementById('settings-btn');
+        settingsBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.toggleSettingsMenu();
+        });
+
+        // Show filenames toggle
+        const showFilenamesToggle = document.getElementById('show-filenames-toggle');
+        showFilenamesToggle.checked = this.showFilenames;
+        showFilenamesToggle.addEventListener('change', (e) => {
+            this.showFilenames = e.target.checked;
+            localStorage.setItem('showFilenames', this.showFilenames.toString());
+            this.renderPhotos(); // Re-render photos with new setting
+        });
+
+        // Close settings menu when clicking outside
+        document.addEventListener('click', () => {
+            this.closeSettingsMenu();
+        });
 
         this.setupDragAndDrop();
     }
@@ -249,7 +271,7 @@ class PhotoApp {
                     <img src="${thumbnailSrc}" alt="${photo.originalFilename || photo.filename}" loading="lazy">
                     <div class="photo-info">
                         <div class="photo-date">${date}</div>
-                        <div class="photo-name">${photo.originalFilename || photo.filename}</div>
+                        ${this.showFilenames ? `<div class="photo-name">${photo.originalFilename || photo.filename}</div>` : ''}
                     </div>
                 </div>
             `;
@@ -423,6 +445,16 @@ class PhotoApp {
             modal.classList.remove('show');
             setTimeout(() => modal.remove(), 300);
         }
+    }
+
+    toggleSettingsMenu() {
+        const settingsMenu = document.getElementById('settings-menu');
+        settingsMenu.classList.toggle('hidden');
+    }
+
+    closeSettingsMenu() {
+        const settingsMenu = document.getElementById('settings-menu');
+        settingsMenu.classList.add('hidden');
     }
 
     toggleSelectionMode() {

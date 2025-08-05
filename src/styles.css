@@ -691,3 +691,65 @@ h1 {
     overflow: hidden;
     text-overflow: ellipsis;
 }
+
+/* Settings Dropdown */
+.settings-dropdown {
+    position: relative;
+    display: inline-block;
+}
+
+.settings-btn {
+    background: none;
+    border: none;
+    color: #666;
+    font-size: 1.2rem;
+    padding: 8px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.settings-btn:hover {
+    background: #f0f0f0;
+    color: #333;
+}
+
+.settings-menu {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    background: white;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    padding: 8px 0;
+    min-width: 200px;
+    z-index: 1000;
+    margin-top: 4px;
+}
+
+.settings-menu.hidden {
+    display: none;
+}
+
+.setting-item {
+    display: flex;
+    align-items: center;
+    padding: 8px 16px;
+    cursor: pointer;
+    transition: background 0.2s;
+    gap: 8px;
+}
+
+.setting-item:hover {
+    background: #f0f0f0;
+}
+
+.setting-item input[type="checkbox"] {
+    margin: 0;
+}
+
+.setting-item span {
+    color: #333;
+    font-size: 0.9rem;
+}
