@@ -532,6 +532,12 @@ h1 {
     color: white;
 }
 
+.modal-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
 .modal-header h2 {
     margin: 0;
     font-size: 1.5rem;
@@ -557,6 +563,26 @@ h1 {
 
 .modal-close:hover {
     background: rgba(255, 255, 255, 0.2);
+}
+
+.cluster-delete-btn {
+    background: rgba(220, 53, 69, 0.8);
+    border: none;
+    color: white;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.cluster-delete-btn:hover {
+    background: rgba(220, 53, 69, 1);
+    transform: translateY(-1px);
 }
 
 .modal-body {

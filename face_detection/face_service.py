@@ -947,6 +947,31 @@ async def find_similar_faces_endpoint(file: UploadFile = File(...), k: int = 10)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.delete("/clusters/{cluster_id}")
+async def delete_cluster_endpoint(cluster_id: int):
+    """Delete a face cluster and rebuild FAISS index"""
+    try:
+        print(f"Face service: Deleting cluster {cluster_id}")
+        
+        # Reload face metadata from database
+        face_service.face_metadata = face_service.get_faces_from_db()
+        
+        # Rebuild FAISS index to reflect database changes
+        face_service.rebuild_faiss_index()
+        
+        print(f"Face service: Cluster {cluster_id} deleted, FAISS index rebuilt")
+        return JSONResponse({
+            "success": True,
+            "message": f"Cluster {cluster_id} deleted and FAISS index rebuilt"
+        })
+        
+    except Exception as e:
+        print(f"Error deleting cluster {cluster_id}: {e}")
+        return JSONResponse({
+            "success": False,
+            "message": str(e)
+        }, status_code=500)
+
 @app.get("/stats")
 async def get_stats():
     """Get service statistics"""

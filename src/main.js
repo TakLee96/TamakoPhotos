@@ -320,6 +320,39 @@ function getAllFaces() {
   });
 }
 
+function deleteFacesInCluster(clusterId) {
+  return new Promise((resolve, reject) => {
+    // Get count of faces to be deleted
+    db.get("SELECT COUNT(*) as count FROM faces WHERE cluster_id = ?", [clusterId], (err, row) => {
+      if (err) {
+        reject(err);
+        return;
+      }
+      
+      const faceCount = row.count || 0;
+      
+      // Delete faces with this cluster_id
+      db.run("DELETE FROM faces WHERE cluster_id = ?", [clusterId], function(err) {
+        if (err) {
+          reject(err);
+        } else {
+          // Update photo face counts for affected photos
+          db.run(`UPDATE photos SET faceCount = (
+            SELECT COUNT(*) FROM faces WHERE photo_id = photos.id
+          ) WHERE id IN (
+            SELECT DISTINCT photo_id FROM faces WHERE cluster_id = ?
+          )`, [clusterId], (err) => {
+            if (err) {
+              console.error('Error updating photo face counts:', err);
+            }
+            resolve({ deletedFaces: faceCount, deletedRows: this.changes });
+          });
+        }
+      });
+    });
+  });
+}
+
 function deletePhotoFromDB(photoId) {
   return new Promise((resolve, reject) => {
     // First get the photo info for file cleanup
@@ -545,64 +578,91 @@ async function detectFaces(imagePath, photoId) {
 ipcMain.handle('upload-photos', async (event, filePaths) => {
   const results = [];
   let processedCount = 0;
+  const batchSize = 3; // Process 3 photos simultaneously
   
-  for (const filePath of filePaths) {
-    try {
-      const originalFilename = path.basename(filePath);
-      const fileExtension = path.extname(originalFilename);
-      
-      // Generate unique ID for this photo (UTF-8 safe)
-      const photoId = Date.now().toString() + Math.random().toString(36).substr(2, 9);
-      const safeFilename = `${photoId}${fileExtension}`;
-      const newPath = path.join(PHOTOS_DIR, safeFilename);
-      const thumbnailPath = path.join(THUMBNAILS_DIR, `thumb_${safeFilename}`);
-      
-      await fs.copyFile(filePath, newPath);
-      
-      const metadata = await extractMetadata(newPath);
-      if (metadata) {
-        // Store original filename for display purposes
-        metadata.originalFilename = originalFilename;
-        metadata.filename = safeFilename;  // Use safe filename for storage
-        metadata.id = photoId;  // Explicit ID assignment
-        metadata.thumbnailPath = await generateThumbnail(newPath, thumbnailPath);
+  // Process photos in batches for better performance
+  for (let i = 0; i < filePaths.length; i += batchSize) {
+    const batch = filePaths.slice(i, i + batchSize);
+    
+    // Process batch concurrently
+    const batchPromises = batch.map(async (filePath) => {
+      try {
+        const originalFilename = path.basename(filePath);
+        const fileExtension = path.extname(originalFilename);
         
-        // Save to database
-        const savedPhoto = await addPhotoToDB(metadata);
-        if (savedPhoto) {
-          results.push(savedPhoto);
+        // Generate unique ID for this photo (UTF-8 safe)
+        const photoId = Date.now().toString() + Math.random().toString(36).substr(2, 9);
+        const safeFilename = `${photoId}${fileExtension}`;
+        const newPath = path.join(PHOTOS_DIR, safeFilename);
+        const thumbnailPath = path.join(THUMBNAILS_DIR, `thumb_${safeFilename}`);
+        
+        await fs.copyFile(filePath, newPath);
+        
+        const metadata = await extractMetadata(newPath);
+        if (metadata) {
+          // Store original filename for display purposes
+          metadata.originalFilename = originalFilename;
+          metadata.filename = safeFilename;  // Use safe filename for storage
+          metadata.id = photoId;  // Explicit ID assignment
+          metadata.thumbnailPath = await generateThumbnail(newPath, thumbnailPath);
           
-          // Send progress update
-          processedCount++;
-          const progress = Math.round((processedCount / filePaths.length) * 50); // 50% for upload
-          event.sender.send('upload-progress', { progress, phase: 'uploading', current: processedCount, total: filePaths.length });
+          // Save to database
+          const savedPhoto = await addPhotoToDB(metadata);
+          if (savedPhoto) {
+            return savedPhoto;
+          }
         }
+        return null;
+      } catch (error) {
+        console.error('Error processing file:', filePath, error);
+        return null;
       }
-    } catch (error) {
-      console.error('Error processing file:', filePath, error);
-    }
+    });
+    
+    // Wait for batch to complete
+    const batchResults = await Promise.all(batchPromises);
+    
+    // Add successful results and update progress
+    batchResults.forEach(result => {
+      if (result) {
+        results.push(result);
+      }
+      processedCount++;
+      const progress = Math.round((processedCount / filePaths.length) * 50); // 50% for upload
+      event.sender.send('upload-progress', { progress, phase: 'uploading', current: processedCount, total: filePaths.length });
+    });
   }
   
-  // Now process faces
+  // Now process faces in batches
   event.sender.send('upload-progress', { progress: 50, phase: 'detecting-faces', current: 0, total: results.length });
   
   let facesProcessed = 0;
-  for (const photo of results) {
-    try {
-      const faceResult = await detectFaces(photo.path, photo.id);
-      if (faceResult.success && faceResult.faces.length > 0) {
-        await addFacesToDB(faceResult.faces, photo.id);
+  const faceBatchSize = 2; // Smaller batch size for face detection (more intensive)
+  
+  for (let i = 0; i < results.length; i += faceBatchSize) {
+    const faceBatch = results.slice(i, i + faceBatchSize);
+    
+    // Process face detection batch concurrently
+    const facePromises = faceBatch.map(async (photo) => {
+      try {
+        const faceResult = await detectFaces(photo.path, photo.id);
+        if (faceResult.success && faceResult.faces.length > 0) {
+          await addFacesToDB(faceResult.faces, photo.id);
+        }
+        return { success: true, photo: photo.id };
+      } catch (error) {
+        console.error('Face detection error for', photo.id, ':', error);
+        return { success: false, photo: photo.id, error };
       }
-      
-      facesProcessed++;
-      const progress = 50 + Math.round((facesProcessed / results.length) * 50); // 50-100% for face detection
-      event.sender.send('upload-progress', { progress, phase: 'detecting-faces', current: facesProcessed, total: results.length });
-    } catch (error) {
-      console.error('Face detection error:', error);
-      facesProcessed++;
-      const progress = 50 + Math.round((facesProcessed / results.length) * 50);
-      event.sender.send('upload-progress', { progress, phase: 'detecting-faces', current: facesProcessed, total: results.length });
-    }
+    });
+    
+    // Wait for face batch to complete
+    await Promise.all(facePromises);
+    
+    // Update progress
+    facesProcessed += faceBatch.length;
+    const progress = 50 + Math.round((facesProcessed / results.length) * 50); // 50-100% for face detection
+    event.sender.send('upload-progress', { progress, phase: 'detecting-faces', current: facesProcessed, total: results.length });
   }
   
   // Complete
@@ -752,6 +812,33 @@ ipcMain.handle('delete-photos', async (event, photoIds) => {
     
   } catch (error) {
     console.error('Error in batch delete:', error);
+    return { success: false, message: error.message };
+  }
+});
+
+ipcMain.handle('delete-cluster', async (event, clusterId) => {
+  try {
+    console.log(`Deleting face cluster: ${clusterId}`);
+    
+    // Delete faces from SQLite database
+    const result = await deleteFacesInCluster(clusterId);
+    
+    // Also notify face service to rebuild FAISS index
+    try {
+      await axios.delete(`${FACE_SERVICE_URL}/clusters/${clusterId}`);
+    } catch (error) {
+      console.log('Face service cluster cleanup skipped (service may be offline)');
+    }
+    
+    console.log(`Successfully deleted cluster ${clusterId} with ${result.deletedFaces} faces`);
+    return { 
+      success: true, 
+      deletedFaces: result.deletedFaces,
+      message: `Deleted ${result.deletedFaces} faces from cluster`
+    };
+    
+  } catch (error) {
+    console.error('Error deleting cluster:', error);
     return { success: false, message: error.message };
   }
 });

@@ -334,7 +334,12 @@ class PhotoApp {
             <div class="modal-content">
                 <div class="modal-header">
                     <h2>Face Cluster - ${cluster.face_count} ${cluster.face_count === 1 ? 'photo' : 'photos'}</h2>
-                    <button class="modal-close" onclick="app.closeClusterModal()">&times;</button>
+                    <div class="modal-actions">
+                        <button class="cluster-delete-btn" onclick="app.deleteCluster(${cluster.cluster_id})" title="Delete this cluster">
+                            🗑️ Delete Cluster
+                        </button>
+                        <button class="modal-close" onclick="app.closeClusterModal()">&times;</button>
+                    </div>
                 </div>
                 <div class="modal-body">
                     <div class="cluster-faces">
@@ -386,6 +391,30 @@ class PhotoApp {
                 this.closeClusterModal();
             }
         });
+    }
+
+    async deleteCluster(clusterId) {
+        if (!confirm('Are you sure you want to delete this face cluster? This will remove all face associations but keep the original photos.')) {
+            return;
+        }
+
+        try {
+            // Call backend to delete cluster
+            const result = await window.electronAPI.deleteCluster(clusterId);
+            
+            if (result.success) {
+                this.showSuccess(`Deleted face cluster with ${result.deletedFaces} faces`);
+                
+                // Close modal and refresh face clusters
+                this.closeClusterModal();
+                await this.loadFaceClusters();
+            } else {
+                this.showError(`Failed to delete cluster: ${result.message}`);
+            }
+        } catch (error) {
+            console.error('Error deleting cluster:', error);
+            this.showError('Error deleting cluster');
+        }
     }
 
     closeClusterModal() {

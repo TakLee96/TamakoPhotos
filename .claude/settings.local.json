@@ -41,7 +41,8 @@
       "Bash(git commit:*)",
       "Bash(chmod:*)",
       "Bash(rm:*)",
-      "Bash(sqlite3:*)"
+      "Bash(sqlite3:*)",
+      "Bash(npx electron-rebuild:*)"
     ],
     "deny": []
   }
