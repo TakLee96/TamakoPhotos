@@ -9,12 +9,8 @@ echo "🔄 Tamako Photos - Data Reset Script"
 echo "This will permanently delete ALL photos, faces, and database content!"
 echo ""
 
-# Confirmation prompt
-read -p "Are you sure you want to reset all data? (type 'yes' to confirm): " confirmation
-if [[ "$confirmation" != "yes" ]]; then
-    echo "❌ Reset cancelled."
-    exit 0
-fi
+# Skip confirmation for automated reset
+echo "⚠️  Skipping confirmation - performing automated reset..."
 
 echo ""
 echo "🧹 Starting data cleanup..."

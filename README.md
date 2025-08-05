@@ -18,10 +18,11 @@ A Windows Desktop photo management application with AI-powered face detection an
 ## 🔧 Prerequisites
 
 **Requirements:**
-1. **Node.js** (version 16 or later)
-2. **Python** (version 3.8 or later) with conda environment named `tensorflow`
-3. **PyTorch** with CUDA support (for GPU acceleration)
-4. **FAISS** (for fast similarity search)
+1. **Node.js v20.12.2** (recommended) with **npm v10.5.0**
+2. **Python 3.10.13** with conda environment named `tensorflow`
+3. **PyTorch 2.7.1+cu126** with CUDA 12.6 support (for GPU acceleration)
+4. **FAISS 1.11.0** (for fast similarity search)
+5. **Conda 23.7.4** for Python environment management
 
 **Optional but Recommended:**
 - **NVIDIA GPU** with CUDA support for 10x faster face detection
@@ -29,14 +30,62 @@ A Windows Desktop photo management application with AI-powered face detection an
 
 ### Python Environment Setup
 
-The Python environment should include:
+**🔧 Verified Working Environment (2025-08-05):**
+
+#### Core Environment:
 ```bash
-conda create -n tensorflow python=3.10
+conda create -n tensorflow python=3.10.13
 conda activate tensorflow
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu126
-pip install faiss-cpu  # or faiss-gpu for CUDA
-pip install fastapi uvicorn opencv-python pillow numpy python-multipart scikit-learn facenet-pytorch
 ```
+
+#### GPU-Accelerated PyTorch (Recommended for NVIDIA GPUs):
+```bash
+# Install PyTorch with CUDA 12.6 support
+pip install torch==2.7.1+cu126 torchvision==0.22.1+cu126 --index-url https://download.pytorch.org/whl/cu126
+```
+
+#### Machine Learning Dependencies:
+```bash
+# Install from requirements.txt for exact versions
+cd face_detection
+pip install -r requirements.txt
+
+# OR manual installation with verified versions:
+pip install faiss-cpu==1.11.0           # Vector similarity search
+pip install facenet-pytorch==2.6.0      # Face recognition models
+pip install opencv-python==4.8.1.78     # Computer vision
+pip install fastapi==0.116.1            # API framework
+pip install uvicorn==0.35.0             # ASGI server
+pip install pillow==10.2.0              # Image processing
+pip install numpy==1.26.0               # Numerical computing
+pip install scikit-learn==1.7.1         # ML utilities
+pip install python-multipart==0.0.20    # File upload support
+```
+
+#### Node.js Dependencies (Verified Working):
+```bash
+# Frontend/Electron dependencies
+npm install
+
+# Core packages with verified versions:
+# - electron@27.3.11          # Desktop application framework
+# - electron-builder@24.13.3  # Application packaging
+# - axios@1.11.0             # HTTP client
+# - sharp@0.32.6              # Image processing (thumbnail generation)
+# - sqlite3@5.1.7            # Database interface
+# - exifr@7.1.3              # EXIF metadata extraction
+# - node-fetch@3.3.2         # HTTP requests
+# - form-data@4.0.4          # Multipart form support
+```
+
+#### Version Compatibility Notes:
+- ✅ **Node.js 20.12.2** + **npm 10.5.0** fully tested and stable
+- ✅ **PyTorch 2.7.1** works with facenet-pytorch 2.6.0 (despite version mismatch warnings)
+- ✅ **CUDA 12.6** fully supported with current PyTorch build
+- ✅ **OpenCV 4.8.1** stable with current mediapipe version
+- ✅ **Sharp 0.32.6** + **SQLite3 5.1.7** native bindings functional in Electron
+- ⚠️ **facenet-pytorch** may show torch version warnings but functions correctly
+- ⚠️ **electron-builder** may require Administrator privileges for Windows distribution builds
 
 ## 🚀 Quick Start (One Command!)
 

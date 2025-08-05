@@ -44,7 +44,15 @@
       "Bash(sqlite3:*)",
       "Bash(npx electron-rebuild:*)",
       "Bash(git push:*)",
-      "Bash(CSC_IDENTITY_AUTO_DISCOVERY=false npm run build)"
+      "Bash(CSC_IDENTITY_AUTO_DISCOVERY=false npm run build)",
+      "Bash(\"/c/Users/jiaha/anaconda3/envs/tensorflow/python.exe\" --version)",
+      "Bash(conda:*)",
+      "Bash(\"/c/Users/jiaha/anaconda3/envs/tensorflow/python.exe\" -c \"import torch; print(''PyTorch version:'', torch.__version__); print(''CUDA available:'', torch.cuda.is_available()); print(''CUDA version:'', torch.version.cuda if torch.cuda.is_available() else ''N/A'')\")",
+      "Bash(\"/c/Users/jiaha/anaconda3/envs/tensorflow/python.exe\" -c \"import facenet_pytorch; print(''FaceNet-PyTorch version:'', facenet_pytorch.__version__); print(''FaceNet-PyTorch requires torch version:'', facenet_pytorch.__dict__.get(''__torch_version__'', ''Unknown''))\")",
+      "Bash(\"/c/Users/jiaha/anaconda3/envs/tensorflow/python.exe\" -c \"import faiss; print(''FAISS version:'', faiss.__version__)\")",
+      "Bash(\"/c/Users/jiaha/anaconda3/envs/tensorflow/python.exe\" -c \"import cv2; print(''OpenCV version:'', cv2.__version__)\")",
+      "Bash(\"/c/Users/jiaha/anaconda3/envs/tensorflow/python.exe\" -c \"import pkg_resources; print(pkg_resources.get_distribution(''facenet-pytorch''))\")",
+      "Bash(bash:*)"
     ],
     "deny": []
   }
