@@ -60,22 +60,98 @@ function initializeDatabase() {
       db.run(`CREATE TABLE IF NOT EXISTS photos (
         id TEXT PRIMARY KEY,
         filename TEXT NOT NULL,
+        originalFilename TEXT,
         path TEXT NOT NULL,
         thumbnailPath TEXT,
         timestamp DATETIME,
         fileSize INTEGER,
         exif TEXT,
-        faces TEXT,
         faceCount INTEGER DEFAULT 0,
         createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
       )`, (err) => {
         if (err) {
           console.error('Error creating photos table:', err);
           reject(err);
-        } else {
-          console.log('Photos table ready');
-          resolve();
+          return;
         }
+        
+        // Create faces table for normalized face storage
+        db.run(`CREATE TABLE IF NOT EXISTS faces (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          photo_id TEXT NOT NULL,
+          face_id INTEGER NOT NULL,
+          x INTEGER NOT NULL,
+          y INTEGER NOT NULL,
+          width INTEGER NOT NULL,
+          height INTEGER NOT NULL,
+          confidence REAL DEFAULT 0.0,
+          face_image TEXT,
+          embedding TEXT,
+          cluster_id INTEGER,
+          createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (photo_id) REFERENCES photos (id) ON DELETE CASCADE
+        )`, (err) => {
+          if (err) {
+            console.error('Error creating faces table:', err);
+            reject(err);
+            return;
+          }
+          
+          // Create face_clusters table for grouping faces
+          db.run(`CREATE TABLE IF NOT EXISTS face_clusters (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT,
+            face_count INTEGER DEFAULT 0,
+            representative_face_id INTEGER,
+            similarity_threshold REAL DEFAULT 0.6,
+            createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (representative_face_id) REFERENCES faces (id)
+          )`, (err) => {
+            if (err) {
+              console.error('Error creating face_clusters table:', err);
+              reject(err);
+              return;
+            }
+            
+            // Add originalFilename column if it doesn't exist (migration)
+            db.run('ALTER TABLE photos ADD COLUMN originalFilename TEXT', (err) => {
+              // Ignore error if column already exists
+              if (err && !err.message.includes('duplicate column name')) {
+                console.error('Error adding originalFilename column:', err);
+              }
+              
+              // Update existing photos to have originalFilename = filename
+              db.run('UPDATE photos SET originalFilename = filename WHERE originalFilename IS NULL', (err) => {
+                if (err) {
+                  console.error('Error updating originalFilename:', err);
+                }
+                
+                // Create indexes for performance
+                const indexes = [
+                  'CREATE INDEX IF NOT EXISTS idx_faces_photo_id ON faces(photo_id)',
+                  'CREATE INDEX IF NOT EXISTS idx_faces_cluster_id ON faces(cluster_id)',
+                  'CREATE INDEX IF NOT EXISTS idx_photos_timestamp ON photos(timestamp)',
+                  'CREATE INDEX IF NOT EXISTS idx_photos_filename ON photos(filename)'
+                ];
+                
+                let indexCount = 0;
+                indexes.forEach(indexSql => {
+                  db.run(indexSql, (err) => {
+                    indexCount++;
+                    if (err) {
+                      console.error('Error creating index:', err);
+                    }
+                    if (indexCount === indexes.length) {
+                      console.log('Database tables and indexes ready');
+                      resolve();
+                    }
+                  });
+                });
+              });
+            });
+          });
+        });
       });
     });
   });
@@ -83,16 +159,23 @@ function initializeDatabase() {
 
 function getAllPhotos() {
   return new Promise((resolve, reject) => {
-    db.all("SELECT * FROM photos ORDER BY timestamp DESC", (err, rows) => {
+    db.all(`SELECT p.*, 
+            COUNT(f.id) as actualFaceCount,
+            GROUP_CONCAT(f.id) as faceIds
+            FROM photos p 
+            LEFT JOIN faces f ON p.id = f.photo_id 
+            GROUP BY p.id 
+            ORDER BY p.timestamp DESC`, (err, rows) => {
       if (err) {
         console.error('Error loading photos from DB:', err);
         reject(err);
       } else {
-        // Parse JSON fields
+        // Parse JSON fields and include face information
         const photos = rows.map(row => ({
           ...row,
           exif: row.exif ? JSON.parse(row.exif) : {},
-          faces: row.faces ? JSON.parse(row.faces) : []
+          faceCount: row.actualFaceCount || 0,
+          faceIds: row.faceIds ? row.faceIds.split(',').map(id => parseInt(id)) : []
         }));
         resolve(photos);
       }
@@ -102,15 +185,19 @@ function getAllPhotos() {
 
 function addPhotoToDB(photo) {
   return new Promise((resolve, reject) => {
-    photo.id = Date.now().toString() + Math.random().toString(36).substr(2, 9);
+    // Use provided ID or generate new one
+    if (!photo.id) {
+      photo.id = Date.now().toString() + Math.random().toString(36).substr(2, 9);
+    }
     
     const stmt = db.prepare(`INSERT INTO photos 
-      (id, filename, path, thumbnailPath, timestamp, fileSize, exif, createdAt) 
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`);
+      (id, filename, originalFilename, path, thumbnailPath, timestamp, fileSize, exif, createdAt) 
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`);
     
     stmt.run([
       photo.id,
       photo.filename,
+      photo.originalFilename || photo.filename,
       photo.path,
       photo.thumbnailPath,
       photo.timestamp,
@@ -130,45 +217,104 @@ function addPhotoToDB(photo) {
   });
 }
 
-function updatePhotoInDB(photoId, updates) {
+function addFacesToDB(faces, photoId) {
   return new Promise((resolve, reject) => {
-    let setClause = [];
-    let values = [];
-    
-    if (updates.faces) {
-      setClause.push('faces = ?');
-      values.push(JSON.stringify(updates.faces));
-    }
-    if (updates.faceCount !== undefined) {
-      setClause.push('faceCount = ?');
-      values.push(updates.faceCount);
-    }
-    
-    if (setClause.length === 0) {
-      resolve(null);
+    if (!faces || faces.length === 0) {
+      resolve([]);
       return;
     }
     
-    values.push(photoId);
+    const stmt = db.prepare(`INSERT INTO faces 
+      (photo_id, face_id, x, y, width, height, confidence, face_image, embedding) 
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`);
     
-    db.run(`UPDATE photos SET ${setClause.join(', ')} WHERE id = ?`, values, function(err) {
+    const savedFaces = [];
+    let processed = 0;
+    
+    faces.forEach((face, index) => {
+      const location = face.location || {};
+      stmt.run([
+        photoId,
+        face.face_id || index,
+        location.x || 0,
+        location.y || 0,
+        location.width || 0,
+        location.height || 0,
+        face.confidence || 0.0,
+        face.face_image || null,
+        face.embedding ? JSON.stringify(face.embedding) : null
+      ], function(err) {
+        processed++;
+        if (err) {
+          console.error('Error adding face to DB:', err);
+        } else {
+          savedFaces.push({
+            id: this.lastID,
+            photo_id: photoId,
+            face_id: face.face_id || index,
+            ...location,
+            confidence: face.confidence || 0.0
+          });
+        }
+        
+        if (processed === faces.length) {
+          stmt.finalize();
+          // Update photo face count
+          updatePhotoFaceCount(photoId).then(() => {
+            resolve(savedFaces);
+          }).catch(reject);
+        }
+      });
+    });
+  });
+}
+
+function updatePhotoFaceCount(photoId) {
+  return new Promise((resolve, reject) => {
+    db.get("SELECT COUNT(*) as count FROM faces WHERE photo_id = ?", [photoId], (err, row) => {
       if (err) {
-        console.error('Error updating photo in DB:', err);
         reject(err);
       } else {
-        // Return updated photo
-        db.get("SELECT * FROM photos WHERE id = ?", [photoId], (err, row) => {
+        const faceCount = row.count || 0;
+        db.run("UPDATE photos SET faceCount = ? WHERE id = ?", [faceCount, photoId], (err) => {
           if (err) {
             reject(err);
           } else {
-            const photo = row ? {
-              ...row,
-              exif: row.exif ? JSON.parse(row.exif) : {},
-              faces: row.faces ? JSON.parse(row.faces) : []
-            } : null;
-            resolve(photo);
+            resolve(faceCount);
           }
         });
+      }
+    });
+  });
+}
+
+function getFacesByPhotoId(photoId) {
+  return new Promise((resolve, reject) => {
+    db.all("SELECT * FROM faces WHERE photo_id = ? ORDER BY face_id", [photoId], (err, rows) => {
+      if (err) {
+        reject(err);
+      } else {
+        const faces = rows.map(row => ({
+          ...row,
+          embedding: row.embedding ? JSON.parse(row.embedding) : null
+        }));
+        resolve(faces);
+      }
+    });
+  });
+}
+
+function getAllFaces() {
+  return new Promise((resolve, reject) => {
+    db.all("SELECT * FROM faces ORDER BY photo_id, face_id", (err, rows) => {
+      if (err) {
+        reject(err);
+      } else {
+        const faces = rows.map(row => ({
+          ...row,
+          embedding: row.embedding ? JSON.parse(row.embedding) : null
+        }));
+        resolve(faces);
       }
     });
   });
@@ -402,14 +548,23 @@ ipcMain.handle('upload-photos', async (event, filePaths) => {
   
   for (const filePath of filePaths) {
     try {
-      const filename = path.basename(filePath);
-      const newPath = path.join(PHOTOS_DIR, filename);
-      const thumbnailPath = path.join(THUMBNAILS_DIR, `thumb_${filename}`);
+      const originalFilename = path.basename(filePath);
+      const fileExtension = path.extname(originalFilename);
+      
+      // Generate unique ID for this photo (UTF-8 safe)
+      const photoId = Date.now().toString() + Math.random().toString(36).substr(2, 9);
+      const safeFilename = `${photoId}${fileExtension}`;
+      const newPath = path.join(PHOTOS_DIR, safeFilename);
+      const thumbnailPath = path.join(THUMBNAILS_DIR, `thumb_${safeFilename}`);
       
       await fs.copyFile(filePath, newPath);
       
       const metadata = await extractMetadata(newPath);
       if (metadata) {
+        // Store original filename for display purposes
+        metadata.originalFilename = originalFilename;
+        metadata.filename = safeFilename;  // Use safe filename for storage
+        metadata.id = photoId;  // Explicit ID assignment
         metadata.thumbnailPath = await generateThumbnail(newPath, thumbnailPath);
         
         // Save to database
@@ -436,10 +591,7 @@ ipcMain.handle('upload-photos', async (event, filePaths) => {
     try {
       const faceResult = await detectFaces(photo.path, photo.id);
       if (faceResult.success && faceResult.faces.length > 0) {
-        await updatePhotoInDB(photo.id, { 
-          faces: faceResult.faces, 
-          faceCount: faceResult.face_count 
-        });
+        await addFacesToDB(faceResult.faces, photo.id);
       }
       
       facesProcessed++;

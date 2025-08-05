@@ -246,10 +246,10 @@ class PhotoApp {
                 <div class="photo-item" data-photo-id="${photo.id}" onclick="app.openPhoto('${photo.id}')">
                     <button class="photo-delete-btn" onclick="event.stopPropagation(); app.deletePhoto('${photo.id}')" title="Delete photo">×</button>
                     <div class="photo-checkbox" onclick="app.togglePhotoSelection('${photo.id}', event)"></div>
-                    <img src="${thumbnailSrc}" alt="${photo.filename}" loading="lazy">
+                    <img src="${thumbnailSrc}" alt="${photo.originalFilename || photo.filename}" loading="lazy">
                     <div class="photo-info">
                         <div class="photo-date">${date}</div>
-                        <div class="photo-name">${photo.filename}</div>
+                        <div class="photo-name">${photo.originalFilename || photo.filename}</div>
                     </div>
                 </div>
             `;
@@ -305,13 +305,95 @@ class PhotoApp {
         }).join('');
     }
 
-    viewCluster(clusterId) {
+    async viewCluster(clusterId) {
         const cluster = this.faceClusters.find(c => c.cluster_id === clusterId);
         if (!cluster) return;
 
-        // Create modal or detailed view for cluster
-        console.log('Viewing cluster:', cluster);
-        // TODO: Implement detailed cluster view
+        // Get all photo IDs for faces in this cluster
+        const photoIds = [...new Set(cluster.faces.map(face => face.photo_id))];
+        
+        // Get photo details for these IDs
+        const clusterPhotos = this.photos.filter(photo => photoIds.includes(photo.id));
+        
+        // Create and show cluster modal
+        this.showClusterModal(cluster, clusterPhotos);
+    }
+
+    showClusterModal(cluster, photos) {
+        // Remove existing modal if any
+        const existingModal = document.getElementById('cluster-modal');
+        if (existingModal) {
+            existingModal.remove();
+        }
+
+        // Create modal HTML
+        const modal = document.createElement('div');
+        modal.id = 'cluster-modal';
+        modal.className = 'modal';
+        modal.innerHTML = `
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Face Cluster - ${cluster.face_count} ${cluster.face_count === 1 ? 'photo' : 'photos'}</h2>
+                    <button class="modal-close" onclick="app.closeClusterModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="cluster-faces">
+                        <h3>Detected Faces</h3>
+                        <div class="faces-preview">
+                            ${cluster.faces.slice(0, 6).map(face => `
+                                <div class="face-preview">
+                                    <img src="data:image/jpeg;base64,${face.face_image}" alt="Face">
+                                    <div class="face-confidence">${(face.confidence * 100).toFixed(0)}%</div>
+                                </div>
+                            `).join('')}
+                            ${cluster.faces.length > 6 ? `<div class="face-preview more">+${cluster.faces.length - 6} more</div>` : ''}
+                        </div>
+                    </div>
+                    <div class="cluster-photos">
+                        <h3>Photos (${photos.length})</h3>
+                        <div class="cluster-photo-grid">
+                            ${photos.map(photo => {
+                                const thumbnailSrc = photo.thumbnailPath ? 
+                                    `file://${photo.thumbnailPath.replace(/\\/g, '/')}` : 
+                                    `file://${photo.path.replace(/\\/g, '/')}`;
+                                const date = photo.timestamp ? new Date(photo.timestamp).toLocaleDateString() : 'Unknown date';
+                                
+                                return `
+                                    <div class="cluster-photo-item" onclick="app.openPhoto('${photo.id}')">
+                                        <img src="${thumbnailSrc}" alt="${photo.originalFilename || photo.filename}" loading="lazy">
+                                        <div class="cluster-photo-info">
+                                            <div class="cluster-photo-date">${date}</div>
+                                            <div class="cluster-photo-name">${photo.originalFilename || photo.filename}</div>
+                                        </div>
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // Add modal to page
+        document.body.appendChild(modal);
+
+        // Show modal with animation
+        setTimeout(() => modal.classList.add('show'), 10);
+
+        // Close on background click
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                this.closeClusterModal();
+            }
+        });
+    }
+
+    closeClusterModal() {
+        const modal = document.getElementById('cluster-modal');
+        if (modal) {
+            modal.classList.remove('show');
+            setTimeout(() => modal.remove(), 300);
+        }
     }
 
     toggleSelectionMode() {

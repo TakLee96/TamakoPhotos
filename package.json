@@ -15,9 +15,12 @@
     "dev": "bash ./scripts/start-services.sh && electron . --dev",
     "dev:app-only": "electron . --dev",
     "dev:services-only": "bash ./scripts/start-services.sh",
-    "build": "electron-builder",
-    "dist": "electron-builder --publish=never",
+    "rebuild": "electron-rebuild",
+    "postinstall": "electron-rebuild",
+    "build": "npm run rebuild && electron-builder",
+    "dist": "npm run rebuild && electron-builder --publish=never",
     "clean": "npm run stop && sleep 2 && rm -rf node_modules && npm install",
+    "reset": "npm run stop && bash ./scripts/reset-data.sh",
     "status": "echo Checking service status... && tasklist //FI \"IMAGENAME eq python.exe\" 2>/dev/null && tasklist //FI \"IMAGENAME eq electron.exe\" 2>/dev/null"
   },
   "keywords": [
@@ -29,7 +32,8 @@
   "license": "MIT",
   "devDependencies": {
     "electron": "^27.0.0",
-    "electron-builder": "^24.6.4"
+    "electron-builder": "^24.6.4",
+    "electron-rebuild": "^3.2.9"
   },
   "dependencies": {
     "axios": "^1.6.2",
@@ -40,19 +44,41 @@
     "sqlite3": "^5.1.7"
   },
   "build": {
-    "appId": "com.tamako.photos",
+    "appId": "com.tamako.photos", 
     "productName": "Tamako Photos",
     "directories": {
       "output": "dist"
     },
     "files": [
       "src/**/*",
+      "face_detection/**/*",
+      "scripts/**/*",
       "node_modules/**/*",
-      "package.json"
+      "package.json",
+      "!face_detection/faces/**/*",
+      "!face_detection/*.index",
+      "!face_detection/*.json",
+      "!**/*.py[co]",
+      "!**/__pycache__/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "face_detection/",
+        "to": "face_detection/",
+        "filter": ["**/*", "!faces/**/*", "!*.index", "!*.json"]
+      }
     ],
     "win": {
-      "target": "nsis",
-      "icon": "assets/icon.ico"
+      "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    },
+    "extraMetadata": {
+      "main": "src/main.js"
     }
   }
 }

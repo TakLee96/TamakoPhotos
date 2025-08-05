@@ -8,6 +8,7 @@ import numpy as np
 from PIL import Image
 import json
 import os
+import sqlite3
 from typing import List, Dict, Any
 import base64
 from io import BytesIO
@@ -29,14 +30,18 @@ app = FastAPI(title="Face Detection Service")
 
 class FaceDetectionService:
     def __init__(self):
-        self.face_metadata = []
+        self.face_metadata = []  # Keep for backward compatibility during migration
         self.faces_dir = "faces"
         self.metadata_file = "face_metadata.json"
         self.faiss_index_file = "face_embeddings.index"
+        self.db_file = "../photos.db"
         
         # FAISS index for fast similarity search
         self.faiss_index = None
         self.embedding_dimension = 512  # FaceNet embedding dimension
+        
+        # SQLite database connection
+        self.db = None
         
         # Initialize OpenCV face detector (fallback)
         self.face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
@@ -50,7 +55,8 @@ class FaceDetectionService:
             self.init_pytorch_models()
         
         os.makedirs(self.faces_dir, exist_ok=True)
-        self.load_metadata()
+        self.init_database()
+        self.migrate_json_to_sqlite()
         self.initialize_faiss_index()
     
     def init_pytorch_models(self):
@@ -83,14 +89,163 @@ class FaceDetectionService:
             self.mtcnn = None
             self.facenet = None
     
+    def init_database(self):
+        """Initialize SQLite database connection"""
+        try:
+            self.db = sqlite3.connect(self.db_file, check_same_thread=False)
+            self.db.row_factory = sqlite3.Row  # Enable column access by name
+            print(f"Connected to SQLite database: {self.db_file}")
+        except Exception as e:
+            print(f"Error connecting to database: {e}")
+            self.db = None
+    
+    def migrate_json_to_sqlite(self):
+        """Migrate face metadata from JSON file to SQLite database"""
+        try:
+            # Check if JSON file exists and has data to migrate
+            if not os.path.exists(self.metadata_file):
+                print("No JSON metadata file to migrate")
+                return
+            
+            with open(self.metadata_file, 'r') as f:
+                json_metadata = json.load(f)
+            
+            if not json_metadata:
+                print("JSON metadata file is empty")
+                return
+            
+            print(f"Migrating {len(json_metadata)} face records from JSON to SQLite...")
+            
+            if self.db is None:
+                print("Database not available for migration")
+                return
+            
+            cursor = self.db.cursor()
+            migrated_count = 0
+            
+            for face_data in json_metadata:
+                try:
+                    # Check if this face already exists in SQLite
+                    cursor.execute("SELECT COUNT(*) FROM faces WHERE photo_id = ? AND face_id = ?", 
+                                 (face_data.get('photo_id', ''), face_data.get('face_id', 0)))
+                    if cursor.fetchone()[0] > 0:
+                        continue  # Skip if already exists
+                    
+                    # Extract location data
+                    location = face_data.get('location', {})
+                    
+                    # Insert into SQLite
+                    cursor.execute("""
+                        INSERT INTO faces (photo_id, face_id, x, y, width, height, confidence, face_image, embedding)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        face_data.get('photo_id', ''),
+                        face_data.get('face_id', 0),
+                        location.get('x', 0),
+                        location.get('y', 0),
+                        location.get('width', 0),
+                        location.get('height', 0),
+                        face_data.get('confidence', 0.0),
+                        face_data.get('face_image', ''),
+                        json.dumps(face_data.get('embedding', [])) if face_data.get('embedding') else None
+                    ))
+                    migrated_count += 1
+                    
+                except Exception as e:
+                    print(f"Error migrating face record: {e}")
+                    continue
+            
+            self.db.commit()
+            print(f"Successfully migrated {migrated_count} face records to SQLite")
+            
+            # Update photo face counts
+            self.update_all_photo_face_counts()
+            
+            # Backup and remove JSON file after successful migration
+            if migrated_count > 0:
+                backup_file = self.metadata_file + ".migrated_backup"
+                os.rename(self.metadata_file, backup_file)
+                print(f"JSON metadata backed up to {backup_file}")
+            
+        except Exception as e:
+            print(f"Error during migration: {e}")
+    
+    def update_all_photo_face_counts(self):
+        """Update face counts for all photos"""
+        try:
+            if self.db is None:
+                return
+            
+            cursor = self.db.cursor()
+            # Get face counts per photo
+            cursor.execute("""
+                SELECT photo_id, COUNT(*) as face_count 
+                FROM faces 
+                GROUP BY photo_id
+            """)
+            
+            face_counts = cursor.fetchall()
+            for row in face_counts:
+                cursor.execute("UPDATE photos SET faceCount = ? WHERE id = ?", 
+                             (row['face_count'], row['photo_id']))
+            
+            self.db.commit()
+            print(f"Updated face counts for {len(face_counts)} photos")
+            
+        except Exception as e:
+            print(f"Error updating photo face counts: {e}")
+    
+    def get_faces_from_db(self):
+        """Load face metadata from SQLite database"""
+        try:
+            if self.db is None:
+                return []
+            
+            cursor = self.db.cursor()
+            cursor.execute("SELECT * FROM faces ORDER BY photo_id, face_id")
+            rows = cursor.fetchall()
+            
+            faces = []
+            for row in rows:
+                face_data = {
+                    'id': row['id'],
+                    'face_id': row['face_id'],
+                    'photo_id': row['photo_id'],
+                    'location': {
+                        'x': row['x'],
+                        'y': row['y'], 
+                        'width': row['width'],
+                        'height': row['height']
+                    },
+                    'confidence': row['confidence'],
+                    'face_image': row['face_image'],
+                    'embedding': json.loads(row['embedding']) if row['embedding'] else [],
+                    'cluster_id': row['cluster_id']
+                }
+                faces.append(face_data)
+            
+            return faces
+            
+        except Exception as e:
+            print(f"Error loading faces from database: {e}")
+            return []
+    
     def initialize_faiss_index(self):
         """Initialize or load FAISS index for fast similarity search"""
         try:
+            # Get current face data from SQLite
+            self.face_metadata = self.get_faces_from_db()
+            
             if os.path.exists(self.faiss_index_file) and len(self.face_metadata) > 0:
                 # Load existing index
                 print("Loading existing FAISS index...")
                 self.faiss_index = faiss.read_index(self.faiss_index_file)
                 print(f"Loaded FAISS index with {self.faiss_index.ntotal} embeddings")
+                
+                # Verify index size matches database
+                if self.faiss_index.ntotal != len(self.face_metadata):
+                    print(f"Index size mismatch: {self.faiss_index.ntotal} vs {len(self.face_metadata)}, rebuilding...")
+                    self.rebuild_faiss_index()
             else:
                 # Create new index - using inner product for cosine similarity
                 print("Creating new FAISS index...")
@@ -143,25 +298,38 @@ class FaceDetectionService:
         except Exception as e:
             print(f"Error saving FAISS index: {e}")
     
-    def load_metadata(self):
-        """Load existing face metadata"""
+    def save_face_to_db(self, face_data, photo_id):
+        """Save face data to SQLite database"""
         try:
-            if os.path.exists(self.metadata_file):
-                with open(self.metadata_file, 'r') as f:
-                    self.face_metadata = json.load(f)
-                print(f"Loaded {len(self.face_metadata)} face metadata entries")
+            if self.db is None:
+                return None
+            
+            cursor = self.db.cursor()
+            location = face_data.get('location', {})
+            
+            cursor.execute("""
+                INSERT INTO faces (photo_id, face_id, x, y, width, height, confidence, face_image, embedding)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                photo_id,
+                face_data.get('face_id', 0),
+                location.get('x', 0),
+                location.get('y', 0),
+                location.get('width', 0),
+                location.get('height', 0),
+                face_data.get('confidence', 0.0),
+                face_data.get('face_image', ''),
+                json.dumps(face_data.get('embedding', [])) if face_data.get('embedding') else None
+            ))
+            
+            face_id = cursor.lastrowid
+            self.db.commit()
+            
+            return face_id
+            
         except Exception as e:
-            print(f"Error loading metadata: {e}")
-            self.face_metadata = []
-    
-    def save_metadata(self):
-        """Save face metadata"""
-        try:
-            with open(self.metadata_file, 'w') as f:
-                json.dump(self.face_metadata, f)
-            print("Saved face metadata")
-        except Exception as e:
-            print(f"Error saving metadata: {e}")
+            print(f"Error saving face to database: {e}")
+            return None
     
     def extract_face_embedding(self, landmarks) -> np.ndarray:
         """Extract face embedding from MediaPipe landmarks"""
@@ -422,31 +590,25 @@ class FaceDetectionService:
             return [0.0] * 512  # Return zeros on error
     
     def add_faces_to_metadata(self, faces: List[Dict[str, Any]], photo_id: str, photo_path: str):
-        """Add detected faces to metadata storage and FAISS index"""
+        """Add detected faces to SQLite database and FAISS index"""
         try:
             new_embeddings = []
+            saved_faces = []
             
             for face in faces:
-                # Add metadata
-                face_metadata = {
-                    'face_id': len(self.face_metadata),
-                    'photo_id': photo_id,
-                    'photo_path': photo_path,
-                    'location': face['location'],
-                    'face_image': face['face_image'],
-                    'embedding': face.get('embedding', []),
-                    'confidence': face.get('confidence', 0.5)
-                }
-                self.face_metadata.append(face_metadata)
-                
-                # Prepare embedding for FAISS index
-                embedding = face.get('embedding', [])
-                if embedding and len(embedding) == self.embedding_dimension:
-                    embedding_np = np.array(embedding, dtype=np.float32)
-                    if np.linalg.norm(embedding_np) > 0:
-                        # Normalize for cosine similarity
-                        embedding_np = embedding_np / np.linalg.norm(embedding_np)
-                        new_embeddings.append(embedding_np)
+                # Save to SQLite database
+                db_face_id = self.save_face_to_db(face, photo_id)
+                if db_face_id:
+                    saved_faces.append(db_face_id)
+                    
+                    # Prepare embedding for FAISS index
+                    embedding = face.get('embedding', [])
+                    if embedding and len(embedding) == self.embedding_dimension:
+                        embedding_np = np.array(embedding, dtype=np.float32)
+                        if np.linalg.norm(embedding_np) > 0:
+                            # Normalize for cosine similarity
+                            embedding_np = embedding_np / np.linalg.norm(embedding_np)
+                            new_embeddings.append(embedding_np)
             
             # Add new embeddings to FAISS index
             if new_embeddings and self.faiss_index is not None:
@@ -455,10 +617,21 @@ class FaceDetectionService:
                 print(f"Added {len(new_embeddings)} new embeddings to FAISS index")
                 self.save_faiss_index()
             
-            self.save_metadata()
+            # Update in-memory metadata for compatibility
+            self.face_metadata = self.get_faces_from_db()
+            
+            # Update photo face count in main database
+            if self.db:
+                cursor = self.db.cursor()
+                cursor.execute("UPDATE photos SET faceCount = (SELECT COUNT(*) FROM faces WHERE photo_id = ?) WHERE id = ?", 
+                             (photo_id, photo_id))
+                self.db.commit()
+            
+            print(f"Successfully saved {len(saved_faces)} faces to database")
             return True
+            
         except Exception as e:
-            print(f"Error adding faces to metadata: {e}")
+            print(f"Error adding faces to database: {e}")
             return False
     
     def find_similar_faces(self, query_faces: List[Dict[str, Any]], k: int = 10, threshold: float = 0.6):
