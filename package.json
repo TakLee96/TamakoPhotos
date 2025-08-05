@@ -21,6 +21,7 @@
     "dist": "electron-builder --publish=never",
     "clean": "npm run stop && sleep 2 && rm -rf node_modules && npm install",
     "reset": "npm run stop && bash ./scripts/reset-data.sh",
+    "release": "npm run build && bash ./scripts/create-release.sh",
     "status": "echo Checking service status... && tasklist //FI \"IMAGENAME eq python.exe\" 2>/dev/null && tasklist //FI \"IMAGENAME eq electron.exe\" 2>/dev/null"
   },
   "keywords": [
